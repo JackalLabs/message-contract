@@ -1,7 +1,7 @@
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use cosmwasm_std::{CanonicalAddr, Storage, HumanAddr, StdResult, ReadonlyStorage};
+use cosmwasm_std::{CanonicalAddr, Storage, HumanAddr, StdResult, ReadonlyStorage, HandleResponse};
 use cosmwasm_storage::{singleton, singleton_read, ReadonlySingleton, Singleton, PrefixedStorage, ReadonlyPrefixedStorage};
 use secret_toolkit::storage::{AppendStore, AppendStoreMut};
 
@@ -117,7 +117,7 @@ impl File {
 }
 
 
-fn append_file<S: Storage> (
+pub fn append_file<S: Storage> (
     store: &mut S,
     file: &File,
     for_address: &HumanAddr,
@@ -126,6 +126,31 @@ fn append_file<S: Storage> (
     let mut store = AppendStoreMut::attach_or_create(&mut store)?; //this is different from store above, their assignment is different. We borrow as mutable store?  
     store.push(file)
 
+}
+
+pub fn create_empty_collection<S: Storage> (
+    store: &mut S,
+    for_address: &HumanAddr,
+) -> StdResult<HandleResponse>{
+
+
+    let mut store = PrefixedStorage::multilevel(
+        &[PREFIX_MSGS, for_address.0.as_bytes()],
+        store
+    );
+
+    println!("empty collection successfuly made");
+
+    // Try to access the storage of files for the account.
+    // If it doesn't exist yet, return a file that says nothing 
+    let mut store = AppendStoreMut::<File, _, _>::attach_or_create(&mut store)?; 
+    // let store = if let Some(result) = store {
+    //     result?
+    // } else {
+    //     return Ok(File::new("nothing".to_string(), "None".to_string(), false))
+    // };
+
+    Ok(HandleResponse::default())
 }
 
 //going to delete Message stuff after we finish writing FILE 
