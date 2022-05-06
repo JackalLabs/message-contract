@@ -1,11 +1,13 @@
 use crate::msg::{HandleMsg, InitMsg, MsgsResponse, QueryMsg, ViewingPermissions};
-use crate::state::{config, Message, File, State, PERFIX_PERMITS, PREFIX_MSGS};
+use crate::state::{config, Message, File, State, /*PERFIX_PERMITS*/ PREFIX_MSGS};
 use cosmwasm_std::{
     debug_print, to_binary, Api, Binary, Env, Extern, HandleResponse, HumanAddr, InitResponse,
     Querier, StdError, StdResult, Storage, ReadonlyStorage,
 };
+
 use cosmwasm_storage::ReadonlyPrefixedStorage;
 use secret_toolkit::storage::AppendStore;
+
 pub fn init<S: Storage, A: Api, Q: Querier>(
     deps: &mut Extern<S, A, Q>,
     env: Env,
@@ -49,7 +51,7 @@ pub fn send_file<S: Storage, A: Api, Q: Querier>(
     debug_print(format!("file stored successfully to {}", to));
     Ok(HandleResponse::default())
 }
-
+//I think this should be outside of File implimentatoin 
 pub fn get_file<S: ReadonlyStorage>(
     storage: &S,
     for_address: &HumanAddr,
@@ -72,7 +74,8 @@ pub fn get_file<S: ReadonlyStorage>(
 
     store.get_at(position)
 } 
-/* 
+
+/* this is the query function to put back in once we've written getAllFiles 
 pub fn query<S: Storage, A: Api, Q: Querier>(
     deps: &Extern<S, A, Q>,
     msg: QueryMsg,
@@ -88,6 +91,7 @@ pub fn query<S: Storage, A: Api, Q: Querier>(
 } */
 
 /* this version is very different from CashManey/Memo
+//should we put a query file? or a query all files? 
 fn query_memo<S: Storage, A: Api, Q: Querier>(
         deps: &Extern<S, A, Q>,
         address: HumanAddr,
@@ -110,6 +114,7 @@ fn query_memo<S: Storage, A: Api, Q: Querier>(
     }
 
 */
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -187,7 +192,7 @@ mod tests {
         //saving a file for address_A
         let file1 = File::new("King_Pepe.jpg".to_string(), env.message.sender.to_string(), false);
         file1.store_file(&mut deps.storage, &HumanAddr("address_A".to_string()));
-        let file1copy = File::get_file(&mut deps.storage,&HumanAddr("address_A".to_string()), 0 ).unwrap();
+        let file1copy = get_file(&mut deps.storage,&HumanAddr("address_A".to_string()), 0 ).unwrap();
         assert_eq!(file1, file1copy);
 
         //trying to get a file at position 2 of address_A's collection. No file exists, so calling this will cause
@@ -198,7 +203,7 @@ mod tests {
         //saving a file for address_B
         let file2 = File::new("Queen_Pepe.jpg".to_string(), env.message.sender.to_string(), false);
         file2.store_file(&mut deps.storage, &HumanAddr("address_B".to_string()));
-        let file2copy = File::get_file(&mut deps.storage,&HumanAddr("address_B".to_string()), 0 ).unwrap();
+        let file2copy = get_file(&mut deps.storage,&HumanAddr("address_B".to_string()), 0 ).unwrap();
         assert_eq!(file2, file2copy);
         //check to make sure that file1 != file2
         assert_ne!(file1, file2);
@@ -248,170 +253,11 @@ mod tests {
     //     assert_eq!(0, res.messages.len());
     // }
 
-    /*/
-    #[test]
-    fn send_message() {
-        let mut deps = mock_dependencies(20, &coins(2, "token"));
-        
-        let msg = InitMsg { owner: None };
-        let env = mock_env("creator", &coins(2, "token"));
-        let _res = init(&mut deps, env, msg).unwrap();
-        
-        let env = mock_env("anyone", &coins(2, "token"));
-        let msg = HandleMsg::SendMemo {
-            to: HumanAddr("creator".to_string()),
-            message: "hello world".to_string(),
-        };
-        let res = handle(&mut deps, env, msg).unwrap();
-        
-        assert_eq!(0, res.messages.len());
-    }*/
+    
     /*
     #[test]
-    fn read_message() {
-        let mut deps = mock_dependencies(20, &coins(2, "token"));
-
-        let msg = InitMsg { owner: None };
-        let env = mock_env("creator", &coins(2, "token"));
-        let _res = init(&mut deps, env, msg).unwrap();
-
-        let env = mock_env("anyone", &coins(2, "token"));
-        let msg = HandleMsg::SendMemo {
-            to: HumanAddr("creator".to_string()),
-            message: "hello world".to_string(),
-        };
-        let res = handle(&mut deps, env, msg).unwrap();
-
-        assert_eq!(0, res.messages.len());
-
-        let res = query(
-            &deps,
-            QueryMsg::GetMemo {
-                address: HumanAddr("creator".to_string()),
-                page: None,
-                page_size: None,
-            },
-        )
-        .unwrap();
-        let value: MsgsResponse = from_binary(&res).unwrap();
-        println!("{:?}", &value.msgs[0]);
-        assert_eq!(value.msgs.len(), 1);
-        assert_eq!(value.msgs[0].message, "hello world".to_string());
-    }*/
+    fn read_message() {}*/
  
     // #[test]
-    // fn read_message_fail() {
-    //     let mut deps = mock_dependencies(20, &coins(2, "token"));
-
-    //     let msg = InitMsg { owner: None };
-    //     let env = mock_env("creator", &coins(2, "token"));
-    //     let _res = init(&mut deps, env, msg).unwrap();
-
-    //     // anyone can increment
-    //     let env = mock_env("anyone", &coins(2, "token"));
-    //     let msg = HandleMsg::SendMemo {
-    //         to: HumanAddr("creator".to_string()),
-    //         message: "hello world".to_string(),
-    //     };
-    //     let _res = handle(&mut deps, env, msg).unwrap();
-
-    //     let res = query(
-    //         &deps,
-    //         QueryMsg::GetMemo {
-    //             address: HumanAddr("creator".to_string()),
-    //             auth: ViewingPermissions {
-    //                 permit: None,
-    //                 key: Some("yoyo".to_string()),
-    //             },
-    //             page: None,
-    //             page_size: None,
-    //         },
-    //     );
-    //     // let value: StdResult<MsgsResponse> = from_binary(&res);
-    //     assert_eq!(res.is_err(), true);
-    // }
-
-
-
-// fn query_memo<S: Storage, A: Api, Q: Querier>(
-//     deps: &Extern<S, A, Q>,
-//     address: HumanAddr,
-//     auth: ViewingPermissions,
-//     page: Option<u32>,
-//     page_size: Option<u32>,
-// ) -> StdResult<MsgsResponse> {
-//     let contract_address = config_read(&deps.storage).load()?.contract;
-
-//     let hrp: String = bech32::decode(address.as_str())
-//         .map_err(|_| StdError::generic_err("Permit not signed for this contract"))?
-//         .0;
-
-//     let mut msgs = vec![];
-
-//     if let Some(key) = auth.key {
-//         if validate_key(&deps.storage, key, &address) {
-//             msgs = Message::get_messages(
-//                 &deps.storage,
-//                 &address,
-//                 page.unwrap_or(0),
-//                 page_size.unwrap_or(10),
-//             )?
-//             .0;
-//         } else {
-//             return Err(StdError::unauthorized());
-//         }
-//     } else if let Some(permit) = auth.permit {
-//         if !permit.check_token(&contract_address) {
-//             return Err(StdError::generic_err("Permit not signed for this contract"));
-//         }
-
-//         if !permit.check_permission(&Permission::History)
-//             && !permit.check_permission(&Permission::Owner)
-//         {
-//             return Err(StdError::generic_err(
-//                 "Permit does not have correct permissions",
-//             ));
-//         }
-
-//         if validate(deps, PERFIX_PERMITS, &permit, contract_address, Some(&hrp))? != address.0 {
-//             return Err(StdError::generic_err("Permit invalid"));
-//         }
-
-//         msgs = Message::get_messages(
-//             &deps.storage,
-//             &address,
-//             page.unwrap_or(0),
-//             page_size.unwrap_or(10),
-//         )?
-//         .0;
-//     }
-
-//     let length = Message::len(&deps.storage, &address);
-
-//     Ok(MsgsResponse { msgs, length })
-// }
-
-// #[test]
-// fn multi_level() {
-//     let mut storage = MockStorage::new();
-
-//     // set with nested
-//     let mut foo = PrefixedStorage::new(b"foo", &mut storage);
-//     let mut bar = PrefixedStorage::new(b"bar", &mut foo);
-//     bar.set(b"baz", b"winner");
-
-//     // we can nest them the same encoding with one operation
-//     let loader = ReadonlyPrefixedStorage::multilevel(&[b"foo", b"bar"], &storage);
-//     assert_eq!(loader.get(b"baz"), Some(b"winner".to_vec()));
-//     println!("testing multilevel");
-
-//     // set with multilevel
-//     let mut foobar = PrefixedStorage::multilevel(&[b"foo", b"bar"], &mut storage);
-//     foobar.set(b"second", b"time");
-
-//     let a = ReadonlyPrefixedStorage::new(b"foo", &storage);
-//     let b = ReadonlyPrefixedStorage::new(b"bar", &a);
-//     assert_eq!(b.get(b"second"), Some(b"time".to_vec()));
-
-
+    // fn read_message_fail() {}
 // 

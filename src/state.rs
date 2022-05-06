@@ -8,8 +8,8 @@ use secret_toolkit::storage::{AppendStore, AppendStoreMut};
 
 const MAX_LENGTH: u16 = 280;
 pub static CONFIG_KEY: &[u8] = b"config"; //this is for initializing the contract 
-pub const PREFIX_MSGS: &[u8] = b"transactions"; //A prefix to add to keys (this is NOT the viewing key--it's just key for each value inside of Storage)
-pub const PERFIX_PERMITS: &str = "revoked_permits"; //this is for the permit system - likely will delete 
+pub const PREFIX_MSGS: &[u8] = b"transactions"; //A prefix to make namespace longer (this is NOT the viewing key--it's just key for each value inside of Storage)
+//pub const PERFIX_PERMITS: &str = "revoked_permits"; this is for the permit system - likely will delete 
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct State {
@@ -52,7 +52,7 @@ impl File {
             //can add allow write list later; however, this is just for sharing 
             //single files with other people, and we're building it so that only 
             //the owner can view their files - why would the owner want to write
-            //to this File struct when this system is built only for simply viewing?
+            //to this File struct when this system is built only for simple viewing?
             
         }
     }
@@ -67,9 +67,7 @@ impl File {
        the file exists, just check the file permission since they overwrite the 
        folder. 
      */
-
     //leaving these function prototypes here just to remember that they exist 
-
     // pub fn can_read(&self, address:String) -> bool{}
     // pub fn can_write(&self, address:String) -> bool{}
     // pub fn allow_read(&mut self, address:String) -> bool {}
@@ -95,29 +93,8 @@ impl File {
         append_file(store, &self, to)
     }
 
-    pub fn get_file<S: ReadonlyStorage>(
-        storage: &S,
-        for_address: &HumanAddr,
-        position: u32
-    ) -> StdResult<Self> {
-    
-        let store = ReadonlyPrefixedStorage::multilevel(
-            &[PREFIX_MSGS, for_address.0.as_bytes()],
-            storage
-        );
-    
-        // Try to access the storage of files for the account.
-        // If it doesn't exist yet, return a file that says nothing 
-        let store = AppendStore::<File, _, _>::attach(&store);
-        let store = if let Some(result) = store {
-            result?
-        } else {
-            return Ok(File::new("nothing".to_string(), "None".to_string(), false))
-        };
-    
-        store.get_at(position)
-    } 
-    //returns length of the collection for given for_address
+    //returns length of the collection that this file belongs in 
+    //possibly move it into contract.rs? 
     pub fn len<S: ReadonlyStorage>(storage: &S,
                                    for_address: &HumanAddr) -> u32 {
         let store = ReadonlyPrefixedStorage::multilevel(
