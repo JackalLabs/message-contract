@@ -1,0 +1,10 @@
+/home/ulquiorra/jackal-memo/target/debug/deps/secret_toolkit_storage-07e65c34ea6d369e.rmeta: /home/ulquiorra/.cargo/registry/src/github.com-1ecc6299db9ec823/secret-toolkit-storage-0.2.0/src/lib.rs /home/ulquiorra/.cargo/registry/src/github.com-1ecc6299db9ec823/secret-toolkit-storage-0.2.0/src/append_store.rs /home/ulquiorra/.cargo/registry/src/github.com-1ecc6299db9ec823/secret-toolkit-storage-0.2.0/src/deque_store.rs /home/ulquiorra/.cargo/registry/src/github.com-1ecc6299db9ec823/secret-toolkit-storage-0.2.0/src/typed_store.rs
+
+/home/ulquiorra/jackal-memo/target/debug/deps/libsecret_toolkit_storage-07e65c34ea6d369e.rlib: /home/ulquiorra/.cargo/registry/src/github.com-1ecc6299db9ec823/secret-toolkit-storage-0.2.0/src/lib.rs /home/ulquiorra/.cargo/registry/src/github.com-1ecc6299db9ec823/secret-toolkit-storage-0.2.0/src/append_store.rs /home/ulquiorra/.cargo/registry/src/github.com-1ecc6299db9ec823/secret-toolkit-storage-0.2.0/src/deque_store.rs /home/ulquiorra/.cargo/registry/src/github.com-1ecc6299db9ec823/secret-toolkit-storage-0.2.0/src/typed_store.rs
+
+/home/ulquiorra/jackal-memo/target/debug/deps/secret_toolkit_storage-07e65c34ea6d369e.d: /home/ulquiorra/.cargo/registry/src/github.com-1ecc6299db9ec823/secret-toolkit-storage-0.2.0/src/lib.rs /home/ulquiorra/.cargo/registry/src/github.com-1ecc6299db9ec823/secret-toolkit-storage-0.2.0/src/append_store.rs /home/ulquiorra/.cargo/registry/src/github.com-1ecc6299db9ec823/secret-toolkit-storage-0.2.0/src/deque_store.rs /home/ulquiorra/.cargo/registry/src/github.com-1ecc6299db9ec823/secret-toolkit-storage-0.2.0/src/typed_store.rs
+
+/home/ulquiorra/.cargo/registry/src/github.com-1ecc6299db9ec823/secret-toolkit-storage-0.2.0/src/lib.rs:
+/home/ulquiorra/.cargo/registry/src/github.com-1ecc6299db9ec823/secret-toolkit-storage-0.2.0/src/append_store.rs:
+/home/ulquiorra/.cargo/registry/src/github.com-1ecc6299db9ec823/secret-toolkit-storage-0.2.0/src/deque_store.rs:
+/home/ulquiorra/.cargo/registry/src/github.com-1ecc6299db9ec823/secret-toolkit-storage-0.2.0/src/typed_store.rs:

@@ -1,0 +1,1 @@
+/home/ulquiorra/JACKAL-filesharing/target/debug/libjackal_memo.so: /home/ulquiorra/JACKAL-filesharing/src/contract.rs /home/ulquiorra/JACKAL-filesharing/src/lib.rs /home/ulquiorra/JACKAL-filesharing/src/msg.rs /home/ulquiorra/JACKAL-filesharing/src/state.rs

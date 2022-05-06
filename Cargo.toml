@@ -1,0 +1,30 @@
+[package]
+name = "jackal-memo"
+version = "1.0.0"
+authors = ["Jackal Labs"]
+edition = "2018"
+
+exclude = [
+  # Those files are rust-optimizer artifacts. You might want to commit them for convenience but they should not be part of the source code publication.
+  "contract.wasm",
+  "hash.txt",
+]
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[features]
+default = []
+
+
+[dependencies]
+cosmwasm-std = { package = "secret-cosmwasm-std", version = "0.10" }
+cosmwasm-storage = { package = "secret-cosmwasm-storage", version = "0.10" }
+secret-toolkit = "0.2.0"
+cosmwasm-schema = { package = "cosmwasm-schema", version = "0.10" }
+schemars = "0.7"
+serde = { version = "1.0.103", default-features = false, features = ["derive"] }
+snafu = { version = "0.6.3" }
+bech32 = "0.8.1"
