@@ -1,17 +1,18 @@
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use cosmwasm_std::HumanAddr;
-use crate::state::Message;
+
+use crate::state::File;
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct InitMsg {
-    pub owner: Option<HumanAddr>
+    pub owner: Option<HumanAddr> //- don't need this?
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
-pub enum HandleMsg {
-    InitAddress { contents: String, /*entropy: String*/ },
+pub enum HandleMsg {//can add entropy after testing InitAddress without viewing key
+    InitAddress {/*entropy: String*/ },
     SendFile { to: HumanAddr, contents: String },
     SetViewingKey {
         key: String,
@@ -24,7 +25,7 @@ pub enum HandleMsg {
 #[serde(rename_all = "snake_case")]
 pub enum QueryMsg {
     // GetCount returns the current count as a json-encoded number
-    GetMemo { address: HumanAddr, page: Option<u32>, page_size: Option<u32> },
+    GetFiles { address: HumanAddr},
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
@@ -35,8 +36,17 @@ pub struct ViewingPermissions {
 
 // We define a custom struct for each query response
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
-pub struct MsgsResponse {
-    pub msgs: Vec<Message>,
+//not sure if we need this
+pub struct fileResponse {
+    pub files: Vec<File>,
     pub length: u32
 }
 
+pub enum HandleAnswer {
+    DefaultAnswer { status:ResponseStatus},
+    //CreateViewingKey { key: ViewingKey },
+}
+pub enum ResponseStatus {
+    Success,
+    Failure,
+}
