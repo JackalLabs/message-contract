@@ -1,6 +1,6 @@
 use std::convert::TryInto;
 
-use crate::msg::{HandleMsg, InitMsg, fileResponse, QueryMsg, ViewingPermissions};
+use crate::msg::{HandleMsg, InitMsg, FileResponse, QueryMsg, ViewingPermissions};
 use crate::state::{config, append_file, create_empty_collection, File, State, /*PERFIX_PERMITS*/ PREFIX_MSGS};
 use crate::backend::{try_init, get_files};
 
@@ -10,16 +10,19 @@ use cosmwasm_std::{
 };
 
 use cosmwasm_storage::{ReadonlyPrefixedStorage, PrefixedStorage};
+use secret_toolkit::crypto::sha_256;
 use secret_toolkit::storage::{AppendStore, AppendStoreMut};
 
 pub fn init<S: Storage, A: Api, Q: Querier>(
     deps: &mut Extern<S, A, Q>,
     env: Env,
-    _msg: InitMsg,
+    msg: InitMsg,
 ) -> StdResult<InitResponse> {
+    
     let state = State {
         owner: deps.api.canonical_address(&env.message.sender)?,
         contract: env.contract.address,
+        prng_seed: sha_256(base64::encode(msg.prng_seed).as_bytes()).to_vec(), 
     };
 
     config(&mut deps.storage).save(&state)?;
@@ -50,8 +53,11 @@ pub fn send_file<S: Storage, A: Api, Q: Querier>(
     to: HumanAddr,
     contents: String,
 ) -> StdResult<HandleResponse> {
-    let file = File::new(contents, env.message.sender.to_string(), false);
+    let file = File::new(contents, env.message.sender.to_string(), "home/folder1".to_string(), false);
     file.store_file(&mut deps.storage, &to)?;
+
+
+
 
     debug_print(format!("file stored successfully to {}", to));
     Ok(HandleResponse::default())

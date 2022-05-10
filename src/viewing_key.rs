@@ -4,7 +4,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 use cosmwasm_std::Env;
-use secret_toolkit::crypto::{sha_256, Prng};
+use secret_toolkit::crypto::{sha_256, Prng}; /*Safe to have two secret_toolkit imports inside of cargo.toml? */
 
 use crate::utils::{create_hashed_password, ct_slice_compare};
 
@@ -27,7 +27,7 @@ impl ViewingKey {
         let mut rng_entropy = Vec::with_capacity(entropy_len);
         rng_entropy.extend_from_slice(&env.block.height.to_be_bytes());
         rng_entropy.extend_from_slice(&env.block.time.to_be_bytes());
-        rng_entropy.extend_from_slice(&env.message.sender.0.as_bytes());
+        rng_entropy.extend_from_slice(env.message.sender.0.as_bytes());
         rng_entropy.extend_from_slice(entropy);
 
         let mut rng = Prng::new(seed, &rng_entropy);

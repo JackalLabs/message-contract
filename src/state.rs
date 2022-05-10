@@ -1,3 +1,4 @@
+use std::any::type_name;
 use std::convert::TryInto;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -5,15 +6,23 @@ use serde::{Deserialize, Serialize};
 use cosmwasm_std::{CanonicalAddr, Storage, HumanAddr, StdResult, ReadonlyStorage, HandleResponse};
 use cosmwasm_storage::{singleton, singleton_read, ReadonlySingleton, Singleton, PrefixedStorage, ReadonlyPrefixedStorage};
 use secret_toolkit::storage::{AppendStore, AppendStoreMut};
+use secret_toolkit::serialization::{Bincode2, Serde};
+use serde::de::DeserializeOwned;
+
+use crate::viewing_key::ViewingKey;
+
 
 pub static CONFIG_KEY: &[u8] = b"config"; //this is for initializing the contract 
 pub const PREFIX_MSGS: &[u8] = b"collection_of"; //A prefix to make namespace longer (this is NOT the viewing key--it's just key for each value inside of Storage)
 //pub const PERFIX_PERMITS: &str = "revoked_permits"; this is for the permit system - likely will delete 
+pub const PREFIX_VIEWING_KEY: &[u8] = b"viewingkey";
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct State {
     pub owner: CanonicalAddr, //owner address
-    pub contract: HumanAddr //are they saving the contract address? 
+    pub contract: HumanAddr, //are they saving the contract address? 
+    pub prng_seed: Vec<u8>,
+
 }
 
 pub fn config<S: Storage>(storage: &mut S) -> Singleton<S, State> {
@@ -23,56 +32,54 @@ pub fn config<S: Storage>(storage: &mut S) -> Singleton<S, State> {
 pub fn config_read<S: Storage>(storage: &S) -> ReadonlySingleton<S, State> {
     singleton_read(storage, CONFIG_KEY)
 }
+pub fn write_viewing_key<S: Storage>(store: &mut S, owner: &CanonicalAddr, key: &ViewingKey) {
+    let mut user_key_store = PrefixedStorage::new(PREFIX_VIEWING_KEY, store);
+    user_key_store.set(owner.as_slice(), &key.to_hashed());
+}
+
+pub fn read_viewing_key<S: Storage>(store: &S, owner: &CanonicalAddr) -> Option<Vec<u8>> {
+    let user_key_store = ReadonlyPrefixedStorage::new(PREFIX_VIEWING_KEY, store);
+    user_key_store.get(owner.as_slice())
+}
+
 
 // HandleMsg FILE
+//Even though we are sending a message that contains link(s) to a file, I decided to call this struct "File" instead of "Message" because it's 
+//more intuitive, i.e., this is a struct named File which contains details that allow the recipient to access a specific file
+//inside of the sender's folders. I could change it back to Message easily though. 
 #[derive(Serialize, Deserialize, JsonSchema, PartialEq, Debug, Clone)]
 pub struct File{
     contents: String,
     owner: String,
-    public: bool,//consider deleting this. If we're only allowing the specific address to query their files, 
-    //what's the point of having a public variable?
+    path: String, //path for that file that was created inside of JACKAL-storage, associated with the owner of said File. 
+    //Front end will have a way of connecting JACKAL-storage with JACKAL-filesharing in order for this to work?
+    public: bool
+    //removed allow_read_list and allow_write_list. This system allows only a user to view files saved at a storage space associated
+    //with their specific address. 
+    //Should remove public: bool? 
 
-    //allow_read_list: OrderedSet<String>, this should definitely not be here 
-    //allow_write_list: OrderedSet<String> - not needed? 
+    //if A sends a file's details (which is inside of A's folders) to B's appendStore space, is the contents and path enough for B to be able to view this file and retrieve it
+    //from IPS/file coin, or does 
+    //A somehow need to 1. retrieve the file to be sent. 2. update that file's allow_read_list to include B's address,and then 3. send the file. 
+    //This would be quite hard because all the code for allow_read_list is inside of JACKAL - storage, and I'm not sure how to make this contract
+    //communicate with the storage contract to enable this to happen
+
 }
 
 impl File {
 
-    pub fn new(contents: String, owner: String, public: bool) -> Self {
+    pub fn new(contents: String, owner: String, path: String, public: bool) -> Self {
         Self {
             contents,
             owner,
-            public,
-            //can add allow write list later; however, this is just for sharing 
-            //single files with other people, and we're building it so that only 
-            //the owner can view their files - why would the owner want to write
-            //to this File struct when this system is built only for simple viewing?
-            
+            path,
+            public
         }
     }
 
     pub fn get_contents(&self) -> &str {
         &self.contents
     }
-
-    /** 
-       Please call these before doing anything to files. If you are adding a newly 
-       created file to a folder, please check that you can write to the folder. If 
-       the file exists, just check the file permission since they overwrite the 
-       folder. 
-     */
-    //leaving these function prototypes here just to remember that they exist 
-    // pub fn can_read(&self, address:String) 
-    // pub fn can_write(&self, address:String) 
-    // pub fn allow_read(&mut self, address:String) 
-    // pub fn allow_write(&mut self, address:String) 
-    // pub fn disallow_read(&mut self, address:String) 
-    // pub fn disallow_write(&mut self, address:String) 
-
-    // if we're only allowing the specific address to query their files, what's the point of having a public variable?
-    // pub fn make_public(&mut self) 
-    // pub fn make_private(&mut self)
-    // pub fn is_public(&self) 
 
     pub fn store_file<S:Storage>(&self, store: &mut S, to: &HumanAddr) -> StdResult<()>{
         append_file(store, &self, to)

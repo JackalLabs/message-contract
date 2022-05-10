@@ -1,6 +1,6 @@
 use std::convert::TryInto;
 
-use crate::msg::{HandleMsg, InitMsg, fileResponse, QueryMsg, ViewingPermissions};
+use crate::msg::{HandleMsg, InitMsg, FileResponse, QueryMsg, ViewingPermissions};
 use crate::state::{config, append_file, create_empty_collection, File, State, /*PERFIX_PERMITS*/ PREFIX_MSGS};
 use cosmwasm_std::{
     debug_print, to_binary, Api, Binary, Env, Extern, HandleResponse, HumanAddr, InitResponse,
@@ -18,16 +18,13 @@ pub fn try_init<S: Storage, A: Api, Q: Querier>(
 ) -> StdResult<HandleResponse> {
     let ha = deps.api.human_address(&deps.api.canonical_address(&env.message.sender)?)?;
     //let adr = String::from(ha.clone().as_str());
-    let file1 = File::new("Hasbullah.jpg".to_string(), "anyone".to_string(), false);
+    let file1 = File::new("Hasbullah.jpg".to_string(), "anyone".to_string(), "home/folder1".to_string(),false);
     //creating an AppendStore collection for sender with a dummy file for testing purposes
     append_file(&mut deps.storage, &file1, &ha);
 
     //creating an empty Appendstore collection for sender 
     //create_empty_collection(& mut deps.storage, &ha);
-
     
-
-
     // let mut store = PrefixedStorage::multilevel(&[PREFIX_MSGS, ha.0.as_bytes()], &mut deps.storage);
     // let store = AppendStore::<File, _, _>::attach(&store);
 
@@ -74,7 +71,7 @@ pub fn get_file<S: ReadonlyStorage>(
     let store = if let Some(result) = store {
         result?
     } else {
-        return Ok(File::new("nothing".to_string(), "None".to_string(), false))
+        return Ok(File::new("nothing".to_string(), "None".to_string(),"home/folder1".to_string(), false))
     };
 
     store.get_at(position)
