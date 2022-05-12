@@ -1,7 +1,8 @@
 use std::convert::TryInto;
 
-use crate::msg::{HandleMsg, InitMsg, FileResponse, QueryMsg, ViewingPermissions};
-use crate::state::{config, append_file, create_empty_collection, File, State, /*PERFIX_PERMITS*/ PREFIX_MSGS};
+use crate::msg::{HandleMsg, InitMsg, MessageResponse, QueryMsg, ViewingPermissions, HandleAnswer};
+use crate::state::{config, append_message, create_empty_collection, Message, State, /*PERFIX_PERMITS*/ PREFIX_MSGS_RECEIVED, CONFIG_KEY, load, write_viewing_key};
+use crate::viewing_key::ViewingKey;
 use cosmwasm_std::{
     debug_print, to_binary, Api, Binary, Env, Extern, HandleResponse, HumanAddr, InitResponse,
     Querier, StdError, StdResult, Storage, ReadonlyStorage,
@@ -14,22 +15,21 @@ use secret_toolkit::storage::{AppendStore, AppendStoreMut};
 pub fn try_init<S: Storage, A: Api, Q: Querier>(
     deps: &mut Extern<S, A, Q>,
     env: Env,
-        //entropy: String,
+    entropy: String,
 ) -> StdResult<HandleResponse> {
     let ha = deps.api.human_address(&deps.api.canonical_address(&env.message.sender)?)?;
     //let adr = String::from(ha.clone().as_str());
-    let file1 = File::new("Hasbullah.jpg".to_string(), "anyone".to_string(), "home/folder1".to_string(),false);
+    let message1 = Message::new(String::from("Hasbulla/homefolder/pepe.jpg"), String::from("Bi.jpg"));
     //creating an AppendStore collection for sender with a dummy file for testing purposes
-    append_file(&mut deps.storage, &file1, &ha);
+    append_message(&mut deps.storage, &message1, &ha);
 
     //creating an empty Appendstore collection for sender 
     //create_empty_collection(& mut deps.storage, &ha);
     
     // let mut store = PrefixedStorage::multilevel(&[PREFIX_MSGS, ha.0.as_bytes()], &mut deps.storage);
-    // let store = AppendStore::<File, _, _>::attach(&store);
+    // let store = AppendStore::<Message, _, _>::attach(&store);
 
-    //Can register wallet info and viewing key after testing init address
-    // //Register Wallet info
+    //Register Wallet info - may not need to do this
     // let wallet_info = WalletInfo { 
     //     init : true
     // };
@@ -39,71 +39,93 @@ pub fn try_init<S: Storage, A: Api, Q: Querier>(
     //     Err(e) => panic!("Bucket Error: {}", e)
     // }
 
-    // // Let's create viewing key - creates a viewing key for whoever made this collection O.o
-    // let config: State = load(&mut deps.storage, CONFIG_KEY)?;
-    // let prng_seed = config.prng_seed;
-    // let key = ViewingKey::new(&env, &prng_seed, (&entropy).as_ref());
-    // let message_sender = deps.api.canonical_address(&env.message.sender)?;
-    // write_viewing_key(&mut deps.storage, &message_sender, &key);
+    // Let's create viewing key - creates a viewing key for whoever made this collection
+    let config: State = load(&mut deps.storage, CONFIG_KEY)?;
+    let prng_seed = config.prng_seed;
+    let key = ViewingKey::new(&env, &prng_seed, (&entropy).as_ref());
+    let message_sender = deps.api.canonical_address(&env.message.sender)?;
+    write_viewing_key(&mut deps.storage, &message_sender, &key);
+    
+    Ok(HandleResponse {
+        messages: vec![],
+        log: vec![],
+        data: Some(to_binary(&HandleAnswer::CreateViewingKey { key })?),
+    })
+}
 
-    // Ok(HandleResponse::default())
-    Ok(HandleResponse::default())
+pub fn try_create_viewing_key<S: Storage, A: Api, Q: Querier>(
+    deps: &mut Extern<S, A, Q>,
+    env: Env,
+    entropy: String,
+) -> StdResult<HandleResponse> {
+    let config: State = load(&mut deps.storage, CONFIG_KEY)?;
+    let prng_seed = config.prng_seed;
+
+    let key = ViewingKey::new(&env, &prng_seed, (&entropy).as_ref());
+
+    let message_sender = deps.api.canonical_address(&env.message.sender)?;
+
+    write_viewing_key(&mut deps.storage, &message_sender, &key);
+
+    Ok(HandleResponse {
+        messages: vec![],
+        log: vec![],
+        data: Some(to_binary(&HandleAnswer::CreateViewingKey { key })?),
+    })
 }
 
 //if you have queried to retrieve a vector of all the files, you know what position your desired file is at 
-//so you can throw in the position and get the file - is this enough for front end to buy buttons to retrieve contents of a file?
+//so you can throw in the position and get the file - is this enough for front end to make buttons to retrieve a single message which can access a file?
 //consider writing fn to get file given a contents: String instead of position? Would be a lot harder 
 
-pub fn get_file<S: ReadonlyStorage>(
+pub fn get_message<S: ReadonlyStorage>(
     storage: &S,
     for_address: &HumanAddr,
     position: u32
-) -> StdResult<File> {
+) -> StdResult<Message> {
 
     let store = ReadonlyPrefixedStorage::multilevel(
-        &[PREFIX_MSGS, for_address.0.as_bytes()],
+        &[PREFIX_MSGS_RECEIVED, for_address.0.as_bytes()],
         storage
     );
 
     // Try to access the storage of files for the account.
-    // If it doesn't exist yet, return a file that says nothing 
-    let store = AppendStore::<File, _, _>::attach(&store);
+    // If it doesn't exist yet, return a Message with path called Empty 
+    let store = AppendStore::<Message, _, _>::attach(&store);
     let store = if let Some(result) = store {
         result?
     } else {
-        return Ok(File::new("nothing".to_string(), "None".to_string(),"home/folder1".to_string(), false))
+        return Ok(Message::new(String::from("Empty/"), String::from("None")))
     };
 
     store.get_at(position)
 } 
 
-pub fn get_files<S: ReadonlyStorage>(
+pub fn get_messages<S: ReadonlyStorage>(
     storage: &S,
-    for_address: &HumanAddr,
+    behalf: &HumanAddr,
 
-) -> StdResult<(Vec<File>, u64)> {
+) -> StdResult<(Vec<Message>, u64)> {
     let store = ReadonlyPrefixedStorage::multilevel(
-        &[PREFIX_MSGS, for_address.0.as_bytes()],
+        &[PREFIX_MSGS_RECEIVED, behalf.0.as_bytes()],
         storage
     );
 
     // Try to access the collection for the account.
     // If it doesn't exist yet, return an empty collection.
-    let store = AppendStore::<File, _, _>::attach(&store);
+    let store = AppendStore::<Message, _, _>::attach(&store);
     let store = if let Some(result) = store {
         result?
     } else {
         return Ok((vec![], 0));
     };
-
     
     let tx_iter = store
         .iter()
-        //.rev()
         .take(store.len().try_into().unwrap());
 
-    let txs: StdResult<Vec<File>> = tx_iter
+    let txs: StdResult<Vec<Message>> = tx_iter
         .map(|tx| tx)
         .collect();
-        txs.map(|txs| (txs, store.len() as u64))
+        txs.map(|txs| (txs, store.len() as u64)) //the length of the collection of messages is also returned -- do we need it?
 }
