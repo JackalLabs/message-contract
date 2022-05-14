@@ -3,6 +3,25 @@
 version = 3
 
 [[package]]
+name = "JACKAL-filesharing"
+version = "1.0.0"
+dependencies = [
+ "base64 0.12.3",
+ "bech32",
+ "cosmwasm-schema",
+ "hex",
+ "schemars",
+ "secret-cosmwasm-std",
+ "secret-cosmwasm-storage",
+ "secret-toolkit",
+ "secret-toolkit-crypto",
+ "serde",
+ "sha2 0.9.9",
+ "snafu",
+ "subtle 2.4.1",
+]
+
+[[package]]
 name = "arrayref"
 version = "0.3.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -200,25 +219,6 @@ name = "itoa"
 version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1aab8fc367588b89dcee83ab0fd66b72b50b72fa1904d7095045ace2b0c81c35"
-
-[[package]]
-name = "jackal-memo"
-version = "1.0.0"
-dependencies = [
- "base64 0.12.3",
- "bech32",
- "cosmwasm-schema",
- "hex",
- "schemars",
- "secret-cosmwasm-std",
- "secret-cosmwasm-storage",
- "secret-toolkit",
- "secret-toolkit-crypto",
- "serde",
- "sha2 0.9.9",
- "snafu",
- "subtle 2.4.1",
-]
 
 [[package]]
 name = "libc"

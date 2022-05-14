@@ -12,40 +12,39 @@ use cosmwasm_storage::{ReadonlyPrefixedStorage, PrefixedStorage};
 use secret_toolkit::storage::{AppendStore, AppendStoreMut};
 
 // HandleMsg::InitAddress
+//Need to prevent user from calling this twice 
 pub fn try_init<S: Storage, A: Api, Q: Querier>(
     deps: &mut Extern<S, A, Q>,
     env: Env,
     entropy: String,
 ) -> StdResult<HandleResponse> {
-    let ha = deps.api.human_address(&deps.api.canonical_address(&env.message.sender)?)?;
-    //let adr = String::from(ha.clone().as_str());
-    let message1 = Message::new(String::from("Hasbulla/homefolder/pepe.jpg"), String::from("Bi.jpg"));
-    //creating an AppendStore collection for sender with a dummy file for testing purposes
-    append_message(&mut deps.storage, &message1, &ha);
 
-    //creating an empty Appendstore collection for sender 
-    //create_empty_collection(& mut deps.storage, &ha);
-    
+    /*append_message will first create an appendStore space for whoever called try_init. We save a dummy message at index 0 
+      so we can easily verify that a space exists for any particular address, and we can also easily retrieve the owner 
+      of the space */
+    let ha = deps.api.human_address(&deps.api.canonical_address(&env.message.sender)?)?;
+
+    let dummy_message = Message::new(String::from("Placeholder/homefolder/dummy.jpg"), String::from(env.message.sender.as_str()));
+
+    //double check below - ok to declare unused variable?
+    let _messages = append_message(&mut deps.storage, &dummy_message, &ha);
+
+
+    //create_empty_collection(& mut deps.storage, &ha); - Experimented with possibility of just creating an empty collection
     // let mut store = PrefixedStorage::multilevel(&[PREFIX_MSGS, ha.0.as_bytes()], &mut deps.storage);
     // let store = AppendStore::<Message, _, _>::attach(&store);
 
-    //Register Wallet info - may not need to do this
-    // let wallet_info = WalletInfo { 
-    //     init : true
-    // };
-    // let bucket_response = bucket(FILE_LOCATION, &mut deps.storage).save(&adr.as_bytes(), &wallet_info);
-    // match bucket_response {
-    //     Ok(bucket_response) => bucket_response,
-    //     Err(e) => panic!("Bucket Error: {}", e)
-    // }
+    //Register Wallet info - may not need to do this unless Erin needs it? 
 
-    // Let's create viewing key - creates a viewing key for whoever made this collection
+    // Let's create viewing key - creates a viewing key for whoever made this collection when they called try_init
     let config: State = load(&mut deps.storage, CONFIG_KEY)?;
     let prng_seed = config.prng_seed;
     let key = ViewingKey::new(&env, &prng_seed, (&entropy).as_ref());
     let message_sender = deps.api.canonical_address(&env.message.sender)?;
     write_viewing_key(&mut deps.storage, &message_sender, &key);
     
+    
+
     Ok(HandleResponse {
         messages: vec![],
         log: vec![],
@@ -105,7 +104,7 @@ pub fn get_messages<S: ReadonlyStorage>(
     storage: &S,
     behalf: &HumanAddr,
 
-) -> StdResult<(Vec<Message>, u64)> {
+) -> StdResult<Vec<Message>> {
     let store = ReadonlyPrefixedStorage::multilevel(
         &[PREFIX_MSGS_RECEIVED, behalf.0.as_bytes()],
         storage
@@ -117,7 +116,7 @@ pub fn get_messages<S: ReadonlyStorage>(
     let store = if let Some(result) = store {
         result?
     } else {
-        return Ok((vec![], 0));
+        return Ok(vec![]);
     };
     
     let tx_iter = store
@@ -127,5 +126,13 @@ pub fn get_messages<S: ReadonlyStorage>(
     let txs: StdResult<Vec<Message>> = tx_iter
         .map(|tx| tx)
         .collect();
-        txs.map(|txs| (txs, store.len() as u64)) //the length of the collection of messages is also returned -- do we need it?
+        txs.map(|txs| (txs)) //the length of the collection of messages is also returned -- do we need it?
 }
+
+// Previous version of get_messages returned the vector of messages AND the length of the vector--this overcomplicates things
+// and is not needed because we already have a len function built in. 
+// let txs: StdResult<Vec<Message>> = tx_iter
+// .map(|tx| tx)
+// .collect();
+// txs.map(|txs| (txs, store.len() as u64)) //the length of the collection of messages is also returned -- do we need it?
+// }

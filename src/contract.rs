@@ -40,10 +40,9 @@ pub fn handle<S: Storage, A: Api, Q: Querier>(
     msg: HandleMsg,
 ) -> StdResult<HandleResponse> {
     match msg {
-        HandleMsg::SendMessage { to, path } => send_message(deps, env, to, path),
-        HandleMsg::CreateViewingKey { entropy, .. } => try_create_viewing_key(deps, env, entropy),
         HandleMsg::InitAddress { entropy } => try_init(deps, env, entropy),
-        // HandleMsg::SetViewingKey { key, .. } => create_key(deps, env, key),
+        HandleMsg::CreateViewingKey { entropy, .. } => try_create_viewing_key(deps, env, entropy),
+        HandleMsg::SendMessage { to, path } => send_message(deps, env, to, path),
     }
 }
 
@@ -55,7 +54,7 @@ pub fn query<S: Storage, A: Api, Q: Querier>(
     match msg {
         //QueryMsg::GetPath { behalf, path, key } => todo!(), - going to be in authenticated queries
         //QueryMsg::GetWalletInfo { behalf, key } => todo!(), - don't need 
-        _=> authenticated_queries(deps, env, msg),
+        _=> authenticated_queries(deps, env, msg), //could just get rid of the "_=>" ? 
     }
 } 
 
@@ -64,13 +63,18 @@ fn authenticated_queries<S: Storage, A: Api, Q: Querier>(
     env: Env,
     msg: QueryMsg,
 ) -> QueryResult {
+    //return a vec that contains address of whoever sent Query, and the key that they passed in when querying
     let (addresses, key) = msg.get_validation_params();
-
+    //this loop seems pointless because addresses vec will only ever contain 1 address. 
     for address in addresses {
+        //convert each address in addresses to canonical form 
         let canonical_addr = deps.api.canonical_address(address)?;
-
+        //checks if the address is tied to a viewing key that's been saved in storage. 
+        //below check is going to return some or none.
         let expected_key = read_viewing_key(&deps.storage, &canonical_addr);
 
+        //Again, below comment doesn't make a whole lot of sense because for our use, addresses vec will only ever 
+        //contain 1 single address, so checking the key should take constant time?
         if expected_key.is_none() {
             // Checking the key will take significant time. We don't want to exit immediately if it isn't set
             // in a way which will allow to time the command and determine if a viewing key doesn't exist
@@ -103,26 +107,29 @@ pub fn send_message<S: Storage, A: Api, Q: Querier>(
     Ok(HandleResponse::default())
 }
 
+//just realised we could get rid of behalf and just have env because we only want to allow people to query their own messages?
 fn query_messages<S: Storage, A: Api, Q: Querier>(
         deps: &Extern<S, A, Q>,
         env: Env,
         behalf: &HumanAddr,
     ) -> StdResult<MessageResponse> {
         
+        let mut messages: Vec<Message> = Vec::new();
+        
+        let equal = &env.message.sender == behalf;
 
-        //need to do check: 
-        //(if behalf == env.message.sender) 
-        //  return the vector of messages
-        //      else
-        //      return error message: "Sorry can only get your own messages!"                  
-        let msgs = get_messages(
+        if equal {
+            let msgs = get_messages(
                 &deps.storage,
                 &behalf,
-            )?
-            .0;
+            )?;
+            messages = msgs
+        } else {
+            return Err(StdError::generic_err("Can only query your own messages!"));
+        }
     
         let len = Message::len(&deps.storage, &behalf);   
-        Ok(MessageResponse {messages: msgs, length: len})
+        Ok(MessageResponse {messages: messages, length: len})
     }
 
 
@@ -133,89 +140,98 @@ mod tests {
     use cosmwasm_std::{coins, from_binary, ReadonlyStorage};
     use cosmwasm_storage::{PrefixedStorage, ReadonlyPrefixedStorage};
     use crate::msg::{MessageResponse, HandleAnswer, self, /*WalletInfoResponse*/};
+    use crate::viewing_key::ViewingKey;
 
     fn init_for_test<S: Storage, A: Api, Q: Querier> (
         deps: &mut Extern<S, A, Q>,
-        address:String,
-    ) /*-> ViewingKey*/ {
+        address: String,
+    ) -> ViewingKey {
 
         // Init Contract
-        let msg = InitMsg {owner: None, prng_seed: todo!() };
+        let msg = InitMsg { prng_seed:String::from("lets init bro")};
         let env = mock_env("creator", &[]);
-        let _res = init(deps, env, msg).unwrap();
+        let _res = init(deps, env, msg).unwrap(); 
 
         // Init Address and Create ViewingKey
         let env = mock_env(String::from(&address), &[]);
         let msg = HandleMsg::InitAddress { entropy: String::from("Entropygoeshereboi") };
         let handle_response = handle(deps, env, msg).unwrap();
-        // let vk = match from_binary(&handle_response.data.unwrap()).unwrap() {
-        //     HandleAnswer::CreateViewingKey { key } => {
-        //         key
-        //     },
-        //     _ => panic!("Unexpected result from handle"),
-        // };
-        // vk
+
+        match from_binary(&handle_response.data.unwrap()).unwrap() {
+            HandleAnswer::CreateViewingKey { key } => {
+                key
+            },
+            _=> panic!("Unexpected result from handle"),
+        }
     }
 
-    //double check this one monday 
     #[test]
-    fn contract_init() {
+    fn test_create_viewing_key() {
         let mut deps = mock_dependencies(20, &[]);
 
-        let msg = InitMsg {owner: None, prng_seed:String::from("lets init bro")};
-        let env = mock_env("creator", &coins(1000, "earth"));
-
-        // we can just call .unwrap() to assert this was a success
-        let res = init(&mut deps, env, msg).unwrap();
-        assert_eq!(0, res.messages.len());
-    } 
-
-    #[test]
-    fn send_file() {
-        let mut deps = mock_dependencies(20, &coins(2, "token"));
-        
-        let msg = InitMsg { owner: None, prng_seed:String::from("lets init bro") };
-        let env = mock_env("creator", &coins(2, "token"));
+        // init
+        let msg = InitMsg {prng_seed:String::from("lets init bro")};
+        let env = mock_env("anyone", &[]);
         let _res = init(&mut deps, env, msg).unwrap();
         
-        //sending a file to contract creator's address 
-        let env = mock_env("Bi", &coins(2, "token"));
-        let msg = HandleMsg::SendMessage {
-            to: HumanAddr("creator".to_string()),
-            path: "home/pepe.jpg".to_string(),
+        // create viewingkey
+        let env = mock_env("anyone", &[]);
+        let create_vk_msg = HandleMsg::CreateViewingKey {
+            entropy: "supbro".to_string(),
+            padding: None,
         };
-        let res = handle(&mut deps, env, msg).unwrap();
-        assert_eq!(0, res.messages.len());
-
-        //sending a file to Address_A's collection
-
-        let env = mock_env("Address_A", &coins(2, "token"));
-        try_init(&mut deps, env, String::from("Entropygoeshereboi") );
-
-        let env = mock_env("Bi", &coins(2, "token"));
-        let msg = HandleMsg::SendMessage {
-            to: HumanAddr("Address_A".to_string()),
-            path: "Abdul.pdf".to_string(),
+        let handle_response = handle(&mut deps, env, create_vk_msg).unwrap();
+        
+        let _vk = match from_binary(&handle_response.data.unwrap()).unwrap() {
+            HandleAnswer::CreateViewingKey { key } => {
+                // println!("viewing key here: {}",key);
+                key
+            },
+            _ => panic!("Unexpected result from handle"),
         };
-        let res = handle(&mut deps, env, msg).unwrap();
-        assert_eq!(0, res.messages.len());
-
-        let env = mock_env("Bi", &coins(2, "token"));
-        //sending another file to address_A's collection
-        let msg = HandleMsg::SendMessage {
-            to: HumanAddr("Address_A".to_string()),
-            path: "home/Khabib.pdf".to_string(),
-        };
-        let res = handle(&mut deps, env, msg).unwrap();
-        assert_eq!(0, res.messages.len());
-
-        let length = Message::len(&mut deps.storage, &HumanAddr::from("Address_A"));
-        println!("Length of Address_A collection is {}\n", length);
-        let A_allfiles = get_messages(&mut deps.storage, &HumanAddr::from("Address_A"));
-        println!("{:?}", A_allfiles);
 
     }
 
+
+
+    #[test]
+    fn send_messages_and_query() {
+        let mut deps = mock_dependencies(20, &coins(2, "token"));
+        let vk = init_for_test(&mut deps, String::from("anyone"));
+
+        let vk2 = init_for_test(&mut deps, String::from("Nuggie"));
+        
+        //sending a file to anyone's address
+        let env = mock_env("sender", &[]);
+        let msg = HandleMsg::SendMessage {
+            to: HumanAddr("anyone".to_string()),
+            path: "Sender/pepe.jpg".to_string(),
+        };
+        let res = handle(&mut deps, env, msg).unwrap();
+        assert_eq!(0, res.messages.len());
+
+        //sending another file to anyone's address
+
+        let env = mock_env("sender", &[]);
+        let msg = HandleMsg::SendMessage {
+            to: HumanAddr("anyone".to_string()),
+            path: "Sender/Abdul.pdf".to_string(),
+        };
+        let res = handle(&mut deps, env, msg).unwrap();
+        assert_eq!(0, res.messages.len());
+
+
+        // Query Messages
+        let env = mock_env("anyone", &[]); //if you check sender to another name, you get error: "Can only query your own messages!"
+        let query_res = query(&deps, env, QueryMsg::GetMessages { behalf: HumanAddr("anyone".to_string()), key: vk.to_string() }, ).unwrap(); //changing view key causes error
+        let value: MessageResponse = from_binary(&query_res).unwrap();
+        println!("All messages --> {:#?}", value.messages);        
+
+        let length = Message::len(&mut deps.storage, &HumanAddr::from("anyone"));
+        println!("Length of anyone's collection is {}\n", length);
+
+    }
+    
     //consider implementing some send_file query tests into below test and see if the the addresses keep getting updated
     #[test]
     fn append_store_works() {
@@ -228,7 +244,7 @@ mod tests {
 
         //init contract 
         let mut deps = mock_dependencies(20, &coins(2, "token"));       
-        let msg = InitMsg { owner: None, prng_seed:String::from("lets init bro") };
+        let msg = InitMsg { prng_seed:String::from("lets init bro") };
         let env = mock_env("creator", &coins(2, "token"));
         let _res = init(&mut deps, env, msg).unwrap();
     
@@ -277,7 +293,23 @@ mod tests {
 
     } 
 
-}
+}   
+
+
+
+
+    // Not sure this is relevant
+    // #[test]
+    // fn contract_init() {
+    //     let mut deps = mock_dependencies(20, &[]);
+
+    //     let msg = InitMsg { prng_seed:String::from("lets init bro")};
+    //     let env = mock_env("creator", &coins(1000, "earth"));
+
+    //     // we can just call .unwrap() to assert this was a success
+    //     let res = init(&mut deps, env, msg).unwrap();
+    //     assert_eq!(0, res.messages.len());
+    // } 
 
 
     // #[test]
