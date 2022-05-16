@@ -6,7 +6,6 @@ use crate::{state::Message, viewing_key::ViewingKey};
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct InitMsg {
-    //pub owner: Option<HumanAddr>, CashManey had this--don't know why it's useful
     pub prng_seed: String,
 }
 
@@ -22,9 +21,7 @@ pub enum HandleMsg {
 #[serde(rename_all = "snake_case")]
 pub enum QueryMsg {
     GetMessages { behalf: HumanAddr, key: String } 
-    //You up bro and GetWalletInfo may not be needed
-    // YouUpBro{address: String},
-    //GetWalletInfo { behalf: HumanAddr, key: String},
+    //Does Erin need "YouUpBro" and "GetWalletInfo?"
 }
 
 #[derive(Serialize, Deserialize, JsonSchema, Debug)]
@@ -48,11 +45,11 @@ pub struct MessageResponse {
 } 
 
 // May not need this
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
-pub struct WalletInfoResponse {
-    pub init: bool,
-    pub all_paths: Vec<String>
-}
+// #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+// pub struct WalletInfoResponse {
+//     pub init: bool,
+//     pub all_paths: Vec<String>
+// }
 
 impl QueryMsg {
     pub fn get_validation_params(&self) -> (Vec<&HumanAddr>, ViewingKey) {

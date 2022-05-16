@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 
 
 use cosmwasm_std::Env;
-use secret_toolkit_crypto::{sha_256, Prng}; /*Safe to have two secret_toolkit imports inside of cargo.toml? */
+use secret_toolkit_crypto::{sha_256, Prng}; 
 
 use crate::utils::{create_hashed_password, ct_slice_compare};
 
