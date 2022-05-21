@@ -60,7 +60,7 @@ pub fn read_viewing_key<S: Storage>(store: &S, owner: &CanonicalAddr) -> Option<
 #[derive(Serialize, Deserialize, JsonSchema, PartialEq, Debug, Clone)]
 pub struct Message{
     
-    path: String, //path for the file that was created inside of JACKAL-storage, associated with the owner of said File. 
+    contents: String, //contents will be a message that Erin said he will customize on the frontend.
     //Front end will have a way of connecting JACKAL-storage with JACKAL-filesharing in order for this to work?
     owner: String
 
@@ -68,15 +68,19 @@ pub struct Message{
 
 impl Message {
 
-    pub fn new(path: String, owner: String) -> Self {
+    pub fn new(contents: String, owner: String) -> Self {
         Self {
-            path,
+            contents,
             owner,
         }
     }
 
-    pub fn get_path(&self) -> &str {
-        &self.path
+    pub fn get_contents(&self) -> &str {
+        &self.contents
+    }
+
+    pub fn get_owner(&self) -> &str {
+        &self.owner
     }
 
     pub fn store_message<S:Storage>(&self, store: &mut S, to: &HumanAddr) -> StdResult<()>{
@@ -110,12 +114,14 @@ pub fn append_message<S: Storage> (
     message: &Message,
     for_address: &HumanAddr, 
 ) -> StdResult<()>{
+    //can either attach, or use "attach_or_create" - undecided
+    let option_error_message = format!("Provided storage doesn't seem like an AppendStore");            
     let mut store = PrefixedStorage::multilevel(&[PREFIX_MSGS_RECEIVED, for_address.0.as_bytes()], store);
-    let mut store = AppendStoreMut::attach_or_create(&mut store)?;   
+    let mut store = AppendStoreMut::attach(&mut store).unwrap_or(Err(StdError::generic_err(option_error_message)))?;
+    
     store.push(message)
 }
 
-//this might not be used 
 pub fn create_empty_collection<S: Storage> (
     store: &mut S,
     for_address: &HumanAddr,

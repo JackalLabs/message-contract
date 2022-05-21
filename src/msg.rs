@@ -14,7 +14,8 @@ pub struct InitMsg {
 pub enum HandleMsg {
     InitAddress {entropy: String},
     CreateViewingKey { entropy: String, padding: Option<String>},
-    SendMessage { to: HumanAddr, path: String },
+    SendMessage { to: HumanAddr, contents: String },
+    DeleteAllMessages {}
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
@@ -48,7 +49,7 @@ pub struct MessageResponse {
 // #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 // pub struct WalletInfoResponse {
 //     pub init: bool,
-//     pub all_paths: Vec<String>
+//     pub all_contents: Vec<String>
 // }
 
 impl QueryMsg {

@@ -1,6 +1,6 @@
 use crate::msg::{HandleMsg, InitMsg, MessageResponse, QueryMsg};
 use crate::state::{Message, State, save, CONFIG_KEY, read_viewing_key};
-use crate::backend::{try_init, get_messages, try_create_viewing_key};
+use crate::backend::{try_init, get_messages, try_create_viewing_key, delete_all_messages, get_collection_owner};
 use crate::viewing_key::VIEWING_KEY_SIZE;
 
 use cosmwasm_std::{
@@ -38,25 +38,24 @@ pub fn handle<S: Storage, A: Api, Q: Querier>(
     match msg {
         HandleMsg::InitAddress { entropy } => try_init(deps, env, entropy),
         HandleMsg::CreateViewingKey { entropy, .. } => try_create_viewing_key(deps, env, entropy),
-        HandleMsg::SendMessage { to, path } => send_message(deps, env, to, path),
+        HandleMsg::SendMessage { to, contents } => send_message(deps, env, to, contents),
+        HandleMsg::DeleteAllMessages {} => delete_all_messages(deps, env)
     }
 }
 
 pub fn query<S: Storage, A: Api, Q: Querier>(
     deps: &Extern<S, A, Q>,
-    env: Env,
     msg: QueryMsg,
 ) -> StdResult<Binary> {
     match msg {
-        //QueryMsg::GetPath { behalf, path, key } => todo!(), - don't need?
+        //QueryMsg::Getcontents { behalf, contents, key } => todo!(), - don't need?
         //QueryMsg::GetWalletInfo { behalf, key } => todo!(), - don't need?
-        _=> authenticated_queries(deps, env, msg), //could just get rid of the "_=>" ? 
+        _=> authenticated_queries(deps, msg), //could just get rid of the "_=>" ? 
     }
 } 
 
 fn authenticated_queries<S: Storage, A: Api, Q: Querier>(
     deps: &Extern<S, A, Q>,
-    env: Env,
     msg: QueryMsg,
 ) -> QueryResult {
     let (addresses, key) = msg.get_validation_params();
@@ -74,7 +73,7 @@ fn authenticated_queries<S: Storage, A: Api, Q: Querier>(
         } else if key.check_viewing_key(expected_key.unwrap().as_slice()) {
 
             return match msg {
-                QueryMsg::GetMessages { behalf, .. } => to_binary(&query_messages(deps, env, &behalf)?),
+                QueryMsg::GetMessages { behalf, .. } => to_binary(&query_messages(deps, &behalf)?),
                 //QueryMsg::GetWalletInfo { behalf, .. } => to_binary(&query_wallet_info(deps, &behalf)?),
                 _ => panic!("How did this even get to this stage. It should have been processed.")
             };
@@ -89,39 +88,37 @@ pub fn send_message<S: Storage, A: Api, Q: Querier>(
     deps: &mut Extern<S, A, Q>,
     env: Env,
     to: HumanAddr,
-    path: String,
+    contents: String,
 ) -> StdResult<HandleResponse> {
-    let file = Message::new(String::from(path), env.message.sender.to_string());
+    let file = Message::new(String::from(contents), env.message.sender.to_string());
     file.store_message(&mut deps.storage, &to)?;
 
     debug_print(format!("file stored successfully to {}", to));
     Ok(HandleResponse::default())
 }
 
-//We could get rid of behalf and just have env because we only want to allow people to query their own messages
-//but perhaps having 'behalf' improves readability and understanding? 
 fn query_messages<S: Storage, A: Api, Q: Querier>(
-        deps: &Extern<S, A, Q>,
-        env: Env,
-        behalf: &HumanAddr,
-    ) -> StdResult<MessageResponse> {
-        
-        let mut messages: Vec<Message> = Vec::new();
-        
-        if &env.message.sender == behalf {
-            let msgs = get_messages(
-                &deps.storage,
-                &behalf,
-            )?;
-            messages = msgs
-        } else {
-            return Err(StdError::generic_err("Can only query your own messages!"));
-        }
+    deps: &Extern<S, A, Q>,
+    behalf: &HumanAddr,
+) -> StdResult<MessageResponse> {
     
-        let len = Message::len(&deps.storage, &behalf);   
-        Ok(MessageResponse {messages: messages, length: len})
+    let mut messages: Vec<Message> = Vec::new();
+
+    let owner = get_collection_owner(&deps.storage, &behalf)?;
+    
+    if owner == behalf.to_string() {
+        let msgs = get_messages(
+            &deps.storage,
+            &behalf,
+        )?;
+        messages = msgs
+    } else {
+        return Err(StdError::generic_err("Can only query your own messages!"));
     }
 
+    let len = Message::len(&deps.storage, &behalf);   
+    Ok(MessageResponse {messages: messages, length: len})
+}
 
 #[cfg(test)]
 mod tests {
@@ -184,34 +181,95 @@ mod tests {
     #[test]
     fn send_messages_and_query() {
         let mut deps = mock_dependencies(20, &coins(2, "token"));
-        let vk = init_for_test(&mut deps, String::from("anyone"));
+        let vk_anyone = init_for_test(&mut deps, String::from("anyone"));
         
         //Changing 'nuggie' to 'anyone' will cause error: "user has already been initiated!"
-        let vk2 = init_for_test(&mut deps, String::from("nuggie"));
+        let vk_nuggie = init_for_test(&mut deps, String::from("nuggie"));
+        
+        //sending a message to anyone's address
+        let env = mock_env("sender", &[]);
+        let msg = HandleMsg::SendMessage {
+            to: HumanAddr("anyone".to_string()),
+            contents: "Hello: sender has shared Pepe.jpg with you".to_string(),
+        };
+        let res = handle(&mut deps, env, msg).unwrap();
+        assert_eq!(0, res.messages.len());
+
+        //sending another message to anyone's address
+
+        let env = mock_env("sender", &[]);
+        let msg = HandleMsg::SendMessage {
+            to: HumanAddr("anyone".to_string()),
+            contents: "Hello: sender has shared Hasbullah.jpg with you".to_string(),
+        };
+        let res = handle(&mut deps, env, msg).unwrap();
+        assert_eq!(0, res.messages.len());
+        
+        // Query Anyone's Messages
+        let query_res = query(&deps, QueryMsg::GetMessages { behalf: HumanAddr("anyone".to_string()), key: vk_anyone.to_string() },).unwrap(); //changing viewing key causes error
+        let value: MessageResponse = from_binary(&query_res).unwrap();
+        println!("All messages --> {:#?}", value.messages);        
+
+        let length = Message::len(&mut deps.storage, &HumanAddr::from("anyone"));
+        println!("Length of anyone's collection is {}\n", length);
+
+        //Query with a different viewing key will fail 
+        let query_res = query(&deps, QueryMsg::GetMessages { behalf: HumanAddr("anyone".to_string()), key: vk_nuggie.to_string() }); //changing viewing key causes error
+        assert!(query_res.is_err());
+
+        //sending a message to nuggie's address
+        let env = mock_env("sender", &[]);
+        let msg = HandleMsg::SendMessage {
+            to: HumanAddr("nuggie".to_string()),
+            contents: "Sender/pepe.jpg".to_string(),
+        };
+        let res = handle(&mut deps, env, msg).unwrap();
+        assert_eq!(0, res.messages.len());
+
+        // Query Nuggies's Messages
+        let query_res = query(&deps, QueryMsg::GetMessages { behalf: HumanAddr("nuggie".to_string()), key: vk_nuggie.to_string() },).unwrap(); //changing viewing key causes error
+        let value: MessageResponse = from_binary(&query_res).unwrap();
+        println!("All messages --> {:#?}", value.messages);        
+
+        let length = Message::len(&mut deps.storage, &HumanAddr::from("nuggie"));
+        println!("Length of nuggie's collection is {}\n", length);
+
+        //Using anyone's viewing key to query nuggie's messages will fail 
+        let query_res = query(&deps, QueryMsg::GetMessages { behalf: HumanAddr("nuggie".to_string()), key: vk_anyone.to_string() }); //changing viewing key causes error
+        assert!(query_res.is_err());
+
+    }
+
+    #[test]
+    fn delete_all_messages() {
+        let mut deps = mock_dependencies(20, &coins(2, "token"));
+        let vk = init_for_test(&mut deps, String::from("anyone"));
         
         //sending a file to anyone's address
         let env = mock_env("sender", &[]);
         let msg = HandleMsg::SendMessage {
             to: HumanAddr("anyone".to_string()),
-            path: "Sender/pepe.jpg".to_string(),
+            contents: "Sender/pepe.jpg".to_string(),
         };
         let res = handle(&mut deps, env, msg).unwrap();
         assert_eq!(0, res.messages.len());
-
-        //sending another file to anyone's address
-
-        let env = mock_env("sender", &[]);
-        let msg = HandleMsg::SendMessage {
-            to: HumanAddr("anyone".to_string()),
-            path: "Sender/hasbullah.pdf".to_string(),
-        };
-        let res = handle(&mut deps, env, msg).unwrap();
-        assert_eq!(0, res.messages.len());
-
-
+        
         // Query Messages
-        let env = mock_env("anyone", &[]); //if you change sender to another name, you get error: "Can only query your own messages!"
-        let query_res = query(&deps, env, QueryMsg::GetMessages { behalf: HumanAddr("anyone".to_string()), key: vk.to_string() },).unwrap(); //changing viewing key causes error
+        let query_res = query(&deps, QueryMsg::GetMessages { behalf: HumanAddr("anyone".to_string()), key: vk.to_string() },).unwrap(); //changing viewing key causes error
+        let value: MessageResponse = from_binary(&query_res).unwrap();
+        println!("All messages --> {:#?}", value.messages);        
+
+        let length = Message::len(&mut deps.storage, &HumanAddr::from("anyone"));
+        println!("Length of anyone's collection is {}\n", length);
+
+        //delete all messages
+        let env = mock_env("anyone", &[]);
+        let msg = HandleMsg::DeleteAllMessages {};
+        let res = handle(&mut deps, env, msg).unwrap();
+        assert_eq!(0, res.messages.len());
+
+        // Query Messages should now only display the dummy message
+        let query_res = query(&deps, QueryMsg::GetMessages { behalf: HumanAddr("anyone".to_string()), key: vk.to_string() },).unwrap(); //changing viewing key causes error
         let value: MessageResponse = from_binary(&query_res).unwrap();
         println!("All messages --> {:#?}", value.messages);        
 
@@ -219,7 +277,46 @@ mod tests {
         println!("Length of anyone's collection is {}\n", length);
 
     }
+
+    #[test]
+    fn cannot_send_to_uninitiated_address(){
+        //sending a file to an uninitiated address
+        //this deps will contain a storage that has not been changed into an Appendstore space 
+        let mut deps = mock_dependencies(18, &coins(4, "earth_coin"));
+        //init_for_test not called and no viewing key is made 
+        let env = mock_env("sender", &[]);
+        let msg = HandleMsg::SendMessage {
+            to: HumanAddr("Peter".to_string()),
+            contents: "Sender/Abdul.pdf".to_string(),
+        };
+        let res = handle(&mut deps, env, msg).unwrap_err();   
+        println!("{}", res);
+    }
+
+    #[test]
+    fn get_owner() {
+        let mut deps = mock_dependencies(20, &coins(2, "token"));
+        let vk = init_for_test(&mut deps, String::from("anyone"));
+        
+        //sending a file to anyone's address
+        let env = mock_env("sender", &[]);
+        let msg = HandleMsg::SendMessage {
+            to: HumanAddr("anyone".to_string()),
+            contents: "Sender/pepe.jpg".to_string(),
+        };
+        let res = handle(&mut deps, env, msg).unwrap();
+        assert_eq!(0, res.messages.len());
+
+        let env = mock_env("anyone", &[]);
+        let owner = get_collection_owner(&deps.storage, &env.message.sender).unwrap();
+        println!("{}", owner);
+        
+    }
     
+
+
+
+
     #[test]
     fn append_store_works() {
 
@@ -274,7 +371,28 @@ mod tests {
 
 }   
 
-// Bi's notes to self: 
-//
-// let ha2 = deps.api.human_address(&deps.api.canonical_address(&env.message.sender).unwrap());
-// note: if human address is 2 characters or fewer, unwrapping fails 
+ /*Bi's notes to self: 
+
+
+
+
+ 
+
+ let ha2 = deps.api.human_address(&deps.api.canonical_address(&env.message.sender).unwrap());
+ note: if human address is 2 characters or fewer, unwrapping fails 
+*/
+
+
+// fn query_messages<S: Storage, A: Api, Q: Querier>(
+//     deps: &Extern<S, A, Q>,
+//     behalf: &HumanAddr,
+// ) -> StdResult<MessageResponse> {
+
+//         let msgs = get_messages(
+//             &deps.storage,
+//             &behalf,
+//         )?;
+
+//     let len = Message::len(&deps.storage, &behalf);   
+//     Ok(MessageResponse {messages: msgs, length: len})
+// }

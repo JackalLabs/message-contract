@@ -1,0 +1,1 @@
+/contract/target/wasm32-unknown-unknown/release/libJACKAL_filesharing.rlib: /contract/src/backend.rs /contract/src/contract.rs /contract/src/lib.rs /contract/src/msg.rs /contract/src/state.rs /contract/src/utils.rs /contract/src/viewing_key.rs

@@ -21,7 +21,7 @@ default = []
 [dependencies]
 cosmwasm-std = { package = "secret-cosmwasm-std", version = "0.10" }
 cosmwasm-storage = { package = "secret-cosmwasm-storage", version = "0.10" }
-secret-toolkit = "0.2.0"
+secret-toolkit = "0.3.0"
 secret-toolkit-crypto = "0.2.0"
 
 cosmwasm-schema = { package = "cosmwasm-schema", version = "0.10" }
