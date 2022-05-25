@@ -13,14 +13,11 @@ use crate::viewing_key::ViewingKey;
 pub static CONFIG_KEY: &[u8] = b"config"; //this is for initializing the contract 
 pub const PREFIX_MSGS_RECEIVED: &[u8] = b"messages_received"; //A prefix to make namespace longer
 
-pub const PREFIX_MSGS_SENT: &[u8] = b"messages_sent"; 
-//Possibly, going to use this as a prefix for saving a collection of messages that user has sent to handle edge cases
-
 pub const PREFIX_VIEWING_KEY: &[u8] = b"viewingkey";
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct State {
-    pub owner: CanonicalAddr, //owner address
+    pub owner: CanonicalAddr, 
     pub contract: HumanAddr, 
     pub prng_seed: Vec<u8>,
 
@@ -60,8 +57,8 @@ pub fn read_viewing_key<S: Storage>(store: &S, owner: &CanonicalAddr) -> Option<
 #[derive(Serialize, Deserialize, JsonSchema, PartialEq, Debug, Clone)]
 pub struct Message{
     
-    contents: String, //contents will be a message that Erin said he will customize on the frontend.
-    //Front end will have a way of connecting JACKAL-storage with JACKAL-filesharing in order for this to work?
+    contents: String, //contents will be a message that Erin will customize on the frontend.
+    //Front end will have a way of connecting JACKAL-storage with JACKAL-filesharing in order for this to work.
     owner: String
 
 }
@@ -87,7 +84,7 @@ impl Message {
         append_message(store, &self, to)
     }
 
-    //returns length of the collection that this message belongs in. Just for testing purposes
+    //returns length of the collection that this message belongs in. Used for testing
     pub fn len<S: ReadonlyStorage>(storage: &S,
                                    for_address: &HumanAddr) -> u32 {
         let store = ReadonlyPrefixedStorage::multilevel(
@@ -108,13 +105,14 @@ impl Message {
         return store.len();
     }
 }
-//see note below
+
+//see notes below regarding AppendStore
 pub fn append_message<S: Storage> (
     store: &mut S,
     message: &Message,
     for_address: &HumanAddr, 
 ) -> StdResult<()>{
-    //can either attach, or use "attach_or_create" - undecided
+    
     let option_error_message = format!("Provided storage doesn't seem like an AppendStore");            
     let mut store = PrefixedStorage::multilevel(&[PREFIX_MSGS_RECEIVED, for_address.0.as_bytes()], store);
     let mut store = AppendStoreMut::attach(&mut store).unwrap_or(Err(StdError::generic_err(option_error_message)))?;
@@ -151,6 +149,12 @@ Note from Bi:
 Every single storage entry that belongs to the list has to have the same namespace. multilevel is simply a 
 way of combining 'PREFIX_MSGS_RECEIVED' to 'for_address' to make a long namespace. The benefits of this are
 unclear at the moment but preference is to keep the namespace long.
+
+attach_or_create function looked useful but for our purposes, I wanted to have more control over
+the list creation process using if-else statements - check out send_message and try_init for some context 
+
+pub const PREFIX_MSGS_SENT: &[u8] = b"messages_sent"; 
+Possibly, going to use this as a prefix for saving a collection of messages that user has sent to handle edge cases
 
 */
 

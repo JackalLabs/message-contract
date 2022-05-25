@@ -23,12 +23,12 @@ pub fn try_init<S: Storage, A: Api, Q: Querier>(
 
     let ha = deps.api.human_address(&deps.api.canonical_address(&env.message.sender)?)?;
 
-    let dummy_message = Message::new(String::from("Placeholder/homefolder/dummy.jpg"), String::from(env.message.sender.as_str()));
+    let dummy_message = Message::new(String::from("Placeholder contents"), String::from(env.message.sender.as_str()));
 
     match already_init{
         false => {
             let _storage_space = create_empty_collection(&mut deps.storage, &ha);
-            let _messages = append_message(&mut deps.storage, &dummy_message, &ha);
+            let _appending_message = append_message(&mut deps.storage, &dummy_message, &ha);
 
             //create a viewing key
             let config: State = load(&mut deps.storage, CONFIG_KEY)?;
@@ -188,23 +188,17 @@ pub fn delete_all_messages<S: Storage, A: Api, Q: Querier>(
     let mut store = PrefixedStorage::multilevel(&[PREFIX_MSGS_RECEIVED, env.message.sender.0.as_bytes()], &mut deps.storage);
     let mut store = AppendStoreMut::<Message, _, _>::attach(&mut store).unwrap_or(Err(StdError::generic_err(option_error_message)))?;
 
+    store.clear();
 
-    for i in 0..store.len()-1 {
-        store.pop()?;
-    }
-
-    //store.clear();
+    let dummy_message = Message::new(String::from("Placeholder contents"), String::from(env.message.sender.as_str()));
+    let _appending_message = append_message(&mut deps.storage, &dummy_message, &env.message.sender);
     
     Ok(HandleResponse::default())
 
 }
 
-
-
-
-
-
 // Bi's notes to self: 
+//
 // Previous version of get_messages returned the vector of messages AND the length of the vector--this overcomplicates things
 // and is not needed because we already have a len function built in. See code below for reference.
 // let txs: StdResult<Vec<Message>> = tx_iter
@@ -218,3 +212,16 @@ pub fn delete_all_messages<S: Storage, A: Api, Q: Querier>(
 // let store = AppendStore::<Message, _, _>::attach(&store);
 
 //Register Wallet info - may not need to do this unless Erin needs it? 
+
+// Old version of delete_all_messages used: 
+//
+// for _i in 0..store.len()-1 {
+//     store.pop()?;
+// }
+// This is very gas inefficient because a larger collection means more calls to pop().
+// clear() is very gas efficient because it calls set_length(0) on the collection to reset the whole collection with one operation
+// Unfortunately with clear(), the dummy message is cleared aswell. I attempted to call set_length(1) on store but the set_length() fn is private
+// within append_store.rs. I think it wise not to change the visibility of a library fn for security reasons. 
+// Fortunately, we can re-append a dummy message (which contains owner's address) after clearing the list. 
+// Written this way, delete_all_messages performs a constant number of operations no matter the size of the collection.
+// On initial testing, the gas price remains the exact same no matter the size of the list -- will do more testing in future. 

@@ -1,6 +1,6 @@
 use crate::msg::{HandleMsg, InitMsg, MessageResponse, QueryMsg};
-use crate::state::{Message, State, save, CONFIG_KEY, read_viewing_key};
-use crate::backend::{try_init, get_messages, try_create_viewing_key, delete_all_messages, get_collection_owner};
+use crate::state::{Message, State, save, CONFIG_KEY, read_viewing_key, create_empty_collection, append_message};
+use crate::backend::{try_init, get_messages, try_create_viewing_key, delete_all_messages, get_collection_owner, collection_exist};
 use crate::viewing_key::VIEWING_KEY_SIZE;
 
 use cosmwasm_std::{
@@ -48,8 +48,6 @@ pub fn query<S: Storage, A: Api, Q: Querier>(
     msg: QueryMsg,
 ) -> StdResult<Binary> {
     match msg {
-        //QueryMsg::Getcontents { behalf, contents, key } => todo!(), - don't need?
-        //QueryMsg::GetWalletInfo { behalf, key } => todo!(), - don't need?
         _=> authenticated_queries(deps, msg), //could just get rid of the "_=>" ? 
     }
 } 
@@ -83,18 +81,36 @@ fn authenticated_queries<S: Storage, A: Api, Q: Querier>(
     Err(StdError::unauthorized())
 }
 
-
 pub fn send_message<S: Storage, A: Api, Q: Querier>(
     deps: &mut Extern<S, A, Q>,
     env: Env,
     to: HumanAddr,
     contents: String,
 ) -> StdResult<HandleResponse> {
-    let file = Message::new(String::from(contents), env.message.sender.to_string());
-    file.store_message(&mut deps.storage, &to)?;
 
-    debug_print(format!("file stored successfully to {}", to));
-    Ok(HandleResponse::default())
+    let message = Message::new(String::from(contents), env.message.sender.to_string());
+
+    let already_init = collection_exist(&mut deps.storage, &to);
+    //if "to" does not have a collection yet, the owner of this dummy message will be to because it will be placed
+    //in the collection that this function makes for them 
+    let dummy_message = Message::new(String::from("Dummy_contents.jpg"), String::from(to.as_str()));
+
+    match already_init{
+        false => {
+            //if recipient does not have a list, make one for them. We let them make their own viewing key. - how to notify that they need to make one? 
+            let _storage_space = create_empty_collection(&mut deps.storage, &to);
+            let _dummy_messages = append_message(&mut deps.storage, &dummy_message, &to);
+            let _saved_message = append_message(&mut deps.storage, &message, &to);
+            debug_print(format!("message stored successfully to {}", to));
+            Ok(HandleResponse::default())
+        }
+        true => {
+
+            message.store_message(&mut deps.storage, &to)?;
+            debug_print(format!("message stored successfully to {}", to));
+            Ok(HandleResponse::default())
+        }
+        }
 }
 
 fn query_messages<S: Storage, A: Api, Q: Querier>(
@@ -116,8 +132,8 @@ fn query_messages<S: Storage, A: Api, Q: Querier>(
         return Err(StdError::generic_err("Can only query your own messages!"));
     }
 
-    let len = Message::len(&deps.storage, &behalf);   
-    Ok(MessageResponse {messages: messages, length: len})
+    
+    Ok(MessageResponse {messages: messages})
 }
 
 #[cfg(test)]
@@ -241,6 +257,63 @@ mod tests {
     }
 
     #[test]
+    fn send_to_uninitiated_address() {
+        let mut deps = mock_dependencies(20, &coins(2, "token"));
+
+        // Init Contract
+        let msg = InitMsg { prng_seed:String::from("lets init bro")};
+        let env = mock_env("creator", &[]);
+        let _res = init(&mut deps, env, msg).unwrap();
+        
+        //sending a message to anyone's address - anyone has NOT initituate a collection for their address
+        let env = mock_env("sender", &[]);
+        let msg = HandleMsg::SendMessage {
+            to: HumanAddr("anyone".to_string()),
+            contents: "Hello: sender has shared Pepe.jpg with you".to_string(),
+        };
+        let res = handle(&mut deps, env, msg).unwrap();
+        assert_eq!(0, res.messages.len());
+
+        //SendMessage above will have made a collection for anyone, and placed above message next to dummy message in this collection. 
+        
+        //sending another message to anyone's address
+        let env = mock_env("sender", &[]);
+        let msg = HandleMsg::SendMessage {
+            to: HumanAddr("anyone".to_string()),
+            contents: "Hello: sender has shared Hasbullah.jpg with you".to_string(),
+        };
+        let res = handle(&mut deps, env, msg).unwrap();
+        assert_eq!(0, res.messages.len());
+
+        //At this point, anyone has a list, so we only need to create a viewing key for anyone 
+        
+        // create viewingkey
+        let env = mock_env("anyone", &[]);
+        let create_vk_msg = HandleMsg::CreateViewingKey {
+            entropy: "supbro".to_string(),
+            padding: None,
+        };
+        let handle_response = handle(&mut deps, env, create_vk_msg).unwrap();
+        
+        let vk_anyone = match from_binary(&handle_response.data.unwrap()).unwrap() {
+            HandleAnswer::CreateViewingKey { key } => {
+                // println!("viewing key here: {}",key);
+                key
+            },
+            _ => panic!("Unexpected result from handle"),
+        };
+
+        // Query Anyone's Messages
+        let query_res = query(&deps, QueryMsg::GetMessages { behalf: HumanAddr("anyone".to_string()), key: vk_anyone.to_string() },).unwrap(); //changing viewing key causes error
+        let value: MessageResponse = from_binary(&query_res).unwrap();
+        println!("All messages --> {:#?}", value.messages);        
+
+        let length = Message::len(&mut deps.storage, &HumanAddr::from("anyone"));
+        println!("Length of anyone's collection is {}\n", length);
+
+    }
+
+    #[test]
     fn delete_all_messages() {
         let mut deps = mock_dependencies(20, &coins(2, "token"));
         let vk = init_for_test(&mut deps, String::from("anyone"));
@@ -279,21 +352,6 @@ mod tests {
     }
 
     #[test]
-    fn cannot_send_to_uninitiated_address(){
-        //sending a file to an uninitiated address
-        //this deps will contain a storage that has not been changed into an Appendstore space 
-        let mut deps = mock_dependencies(18, &coins(4, "earth_coin"));
-        //init_for_test not called and no viewing key is made 
-        let env = mock_env("sender", &[]);
-        let msg = HandleMsg::SendMessage {
-            to: HumanAddr("Peter".to_string()),
-            contents: "Sender/Abdul.pdf".to_string(),
-        };
-        let res = handle(&mut deps, env, msg).unwrap_err();   
-        println!("{}", res);
-    }
-
-    #[test]
     fn get_owner() {
         let mut deps = mock_dependencies(20, &coins(2, "token"));
         let vk = init_for_test(&mut deps, String::from("anyone"));
@@ -312,11 +370,45 @@ mod tests {
         println!("{}", owner);
         
     }
-    
+}   
+   
+ /*Bi's notes to self: 
+
+ let ha2 = deps.api.human_address(&deps.api.canonical_address(&env.message.sender).unwrap());
+ note: if human address is 2 characters or fewer, unwrapping fails 
+*/
 
 
+// fn query_messages<S: Storage, A: Api, Q: Querier>(
+//     deps: &Extern<S, A, Q>,
+//     behalf: &HumanAddr,
+// ) -> StdResult<MessageResponse> {
 
+//         let msgs = get_messages(
+//             &deps.storage,
+//             &behalf,
+//         )?;
 
+//     let len = Message::len(&deps.storage, &behalf);   
+//     Ok(MessageResponse {messages: msgs, length: len})
+// }
+
+// #[test]
+// fn cannot_send_to_uninitiated_address(){
+//     //sending a file to an uninitiated address
+//     //this deps will contain a storage that has not been changed into an Appendstore space 
+//     let mut deps = mock_dependencies(18, &coins(4, "earth_coin"));
+//     //init_for_test not called and no viewing key is made 
+//     let env = mock_env("sender", &[]);
+//     let msg = HandleMsg::SendMessage {
+//         to: HumanAddr("Peter".to_string()),
+//         contents: "Sender/Abdul.pdf".to_string(),
+//     };
+//     let res = handle(&mut deps, env, msg).unwrap_err();   
+//     println!("{}", res);
+// }
+
+/*
     #[test]
     fn append_store_works() {
 
@@ -366,33 +458,5 @@ mod tests {
         println!("Length of Address_A collection is {}\n", updatedlength_A);  
         let A_allfiles = get_messages(&mut deps.storage, &HumanAddr::from("Address_A"));
         println!("{:?}", A_allfiles);
-
     } 
-
-}   
-
- /*Bi's notes to self: 
-
-
-
-
- 
-
- let ha2 = deps.api.human_address(&deps.api.canonical_address(&env.message.sender).unwrap());
- note: if human address is 2 characters or fewer, unwrapping fails 
 */
-
-
-// fn query_messages<S: Storage, A: Api, Q: Querier>(
-//     deps: &Extern<S, A, Q>,
-//     behalf: &HumanAddr,
-// ) -> StdResult<MessageResponse> {
-
-//         let msgs = get_messages(
-//             &deps.storage,
-//             &behalf,
-//         )?;
-
-//     let len = Message::len(&deps.storage, &behalf);   
-//     Ok(MessageResponse {messages: msgs, length: len})
-// }
