@@ -9,7 +9,7 @@
         -  [SendMessage](#--SendMessage)
         -  [DeleteAllMessages](#--SendMessage)
 
-     - [Query](#Query))  
+     - [Query](#Query)
         - [GetMessages](#--GetContents)
 
 # Introduction
